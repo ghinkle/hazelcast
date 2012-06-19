@@ -401,16 +401,19 @@ public class Config implements DataSerializable {
      * @return ExecutorConfig
      */
     public ExecutorConfig getExecutorConfig(String name) {
-        ExecutorConfig ec = this.mapExecutors.get(name);
-        if (ec == null) {
-            ExecutorConfig defaultConfig = mapExecutors.get("default");
-            if (defaultConfig != null) {
-                ec = new ExecutorConfig(name,
-                        defaultConfig.getCorePoolSize(),
-                        defaultConfig.getMaxPoolSize(),
-                        defaultConfig.getKeepAliveSeconds());
-            }
+
+        ExecutorConfig ec;
+        if ((ec = lookupByPattern(mapExecutors, name)) != null) {
+            return ec;
         }
+        ExecutorConfig defaultConfig = mapExecutors.get("default");
+        if (defaultConfig != null) {
+            ec = new ExecutorConfig(name,
+                    defaultConfig.getCorePoolSize(),
+                    defaultConfig.getMaxPoolSize(),
+                    defaultConfig.getKeepAliveSeconds());
+        }
+
         if (ec == null) {
             ec = new ExecutorConfig(name);
             mapExecutors.put(name, ec);

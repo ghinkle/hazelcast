@@ -81,7 +81,7 @@ public class ExecutorConfig implements DataSerializable {
      * @param corePoolSize the corePoolSize to set
      */
     public ExecutorConfig setCorePoolSize(final int corePoolSize) {
-        if (corePoolSize <= 0) {
+        if (corePoolSize < 0) {
             throw new IllegalArgumentException("corePoolSize must be positive");
         }
         this.corePoolSize = corePoolSize;

@@ -28,7 +28,7 @@
     </para>
 
     <para>
-        <emphasis role="bold">2.1.3</emphasis>
+        <emphasis role="bold">2.1.3.apptegic.0</emphasis>
         <itemizedlist>
             <listitem>
                 <para>Fixed join and split brain issues. Improved domain name handling.</para>

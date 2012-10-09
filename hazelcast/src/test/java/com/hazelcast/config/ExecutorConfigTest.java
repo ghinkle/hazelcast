@@ -66,10 +66,11 @@ public class ExecutorConfigTest {
         new ExecutorConfig().setCorePoolSize(-1);
     }
 
+    /* We now allow core pool size to be zero with the queued executor
     @Test(expected = IllegalArgumentException.class)
     public void shouldNotAcceptZeroCorePoolSize() {
         new ExecutorConfig().setCorePoolSize(0);
-    }
+    }*/
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldNotAcceptNegativeMaxPoolSize() {

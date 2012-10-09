@@ -405,16 +405,19 @@ public class Config implements DataSerializable {
      * @return ExecutorConfig
      */
     public ExecutorConfig getExecutorConfig(String name) {
-        ExecutorConfig ec = this.executorConfigs.get(name);
-        if (ec == null) {
-            ExecutorConfig defaultConfig = executorConfigs.get("default");
-            if (defaultConfig != null) {
-                ec = new ExecutorConfig(name,
-                        defaultConfig.getCorePoolSize(),
-                        defaultConfig.getMaxPoolSize(),
-                        defaultConfig.getKeepAliveSeconds());
-            }
+
+        ExecutorConfig ec;
+        if ((ec = lookupByPattern(executorConfigs, name)) != null) {
+            return ec;
         }
+        ExecutorConfig defaultConfig = executorConfigs.get("default");
+        if (defaultConfig != null) {
+            ec = new ExecutorConfig(name,
+                    defaultConfig.getCorePoolSize(),
+                    defaultConfig.getMaxPoolSize(),
+                    defaultConfig.getKeepAliveSeconds());
+        }
+
         if (ec == null) {
             ec = new ExecutorConfig(name);
             executorConfigs.put(name, ec);

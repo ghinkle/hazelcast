@@ -535,6 +535,63 @@ public class MapStoreTest extends TestUtil {
     }
 
     @Test
+    public void testWriteBehindOverCapacityForcedEviction() throws Exception {
+        TestEventBasedMapStore testMapStore = new TestEventBasedMapStore();
+        testMapStore.setLoadAllKeys(false);
+        Config config = newConfig(testMapStore, 10);
+        config.getMapConfig("default").setMaxSize(10).setEvictionPolicy("LRU").setEvictionPercentage(40);
+        config.getMapConfig("default").getMaxSizeConfig().setOverGrowthPercentage(200);
+        HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
+        IMap map = h1.getMap("default");
+
+        for (int i = 0; i < 11; i++) {
+            map.put(i, new Employee("joe_" + i, i, true, 100.00));
+        }
+
+        long timeDonePutting = System.currentTimeMillis();
+
+        float survivingRatio = 1f - config.getMapConfig("default").getEvictionPercentage() / 100.0f;
+
+        assertTrue(map.size() > 11 - 11 * survivingRatio);
+        assertTrue(map.size() <= 11);
+
+        assertEquals(TestEventBasedMapStore.STORE_EVENTS.LOAD_ALL_KEYS, testMapStore.waitForEvent(1));
+
+        int loadCount = 0;
+        for (int i = 0; i < 11; i++) {
+            assertEquals(TestEventBasedMapStore.STORE_EVENTS.LOAD, testMapStore.waitForEvent(1));
+            loadCount++;
+        }
+
+        int storeCount = 0;
+        int storeAllCount = 0;
+
+        while (System.currentTimeMillis() < (timeDonePutting + 500) || (!testMapStore.events.isEmpty())) {
+            Object event = testMapStore.events.poll();
+            if (event == null) {
+                continue;
+            }
+            if (event.equals(TestEventBasedMapStore.STORE_EVENTS.LOAD)) {
+                loadCount++;
+            }
+            if (event.equals(TestEventBasedMapStore.STORE_EVENTS.STORE)) {
+                storeCount++;
+            }
+            if (event.equals(TestEventBasedMapStore.STORE_EVENTS.STORE_ALL)) {
+                storeAllCount++;
+            }
+        }
+
+        assertTrue("Map size is: " + map.size(), map.size() >= 6);
+        assertTrue("Map size is: " + map.size(), map.size() <= 20 * 0.6 /* eviction percentage 40 */);
+
+        assertEquals(11, loadCount);
+        assertTrue(storeCount + storeAllCount >= 1);
+
+        assertTrue(System.currentTimeMillis() - timeDonePutting < 1000L);
+    }
+
+    @Test
     public void testOneMemberWriteBehind() throws Exception {
         TestMapStore testMapStore = new TestMapStore(1, 1, 1);
         testMapStore.setLoadAllKeys(false);

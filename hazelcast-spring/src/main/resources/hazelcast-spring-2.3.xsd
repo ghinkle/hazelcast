@@ -132,6 +132,7 @@
                                 <xs:attribute name="async-backup-count" use="optional" type="xs:string"/>
                                 <xs:attribute name="time-to-live-seconds" use="optional" type="xs:string"/>
                                 <xs:attribute name="max-size" use="optional" type="xs:string"/>
+                                <xs:attribute name="over-growth-percentage" use="optional" type="xs:string"/>
                                 <xs:attribute name="max-size-policy" use="optional" type="xs:string"/>
                                 <xs:attribute name="max-idle-seconds" use="optional" type="xs:string"/>
                                 <xs:attribute name="eviction-delay-seconds" use="optional" type="xs:string"/>

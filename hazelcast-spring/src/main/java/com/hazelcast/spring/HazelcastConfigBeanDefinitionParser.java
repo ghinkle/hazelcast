@@ -366,13 +366,18 @@ public class HazelcastConfigBeanDefinitionParser extends AbstractHazelcastBeanDe
             final Node attName = node.getAttributes().getNamedItem("name");
             final String name = getValue(attName);
             mapConfigBuilder.addPropertyValue("name", name);
-            fillAttributeValues(node, mapConfigBuilder, "maxSize", "maxSizePolicy");
+            fillAttributeValues(node, mapConfigBuilder, "maxSize", "maxSizePolicy", "overGrowthPercentage");
             final BeanDefinitionBuilder maxSizeConfigBuilder = createBeanBuilder(MaxSizeConfig.class);
             final AbstractBeanDefinition maxSizeConfigBeanDefinition = maxSizeConfigBuilder.getBeanDefinition();
             mapConfigBuilder.addPropertyValue("maxSizeConfig", maxSizeConfigBeanDefinition);
             final Node maxSizeNode = node.getAttributes().getNamedItem("max-size");
             if (maxSizeNode != null) {
                 maxSizeConfigBuilder.addPropertyValue("size", getValue(maxSizeNode));
+            }
+            final Node overGrowthPercentageNode = node.getAttributes().getNamedItem("over-growth-percentage");
+            if (overGrowthPercentageNode != null) {
+                maxSizeConfigBuilder.addPropertyValue(xmlToJavaName(cleanNodeName(overGrowthPercentageNode)),
+                                                      getValue(overGrowthPercentageNode));
             }
             final Node maxSizePolicyNode = node.getAttributes().getNamedItem("max-size-policy");
             if (maxSizePolicyNode != null) {

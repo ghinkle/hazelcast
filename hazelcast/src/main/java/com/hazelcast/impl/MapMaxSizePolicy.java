@@ -22,6 +22,8 @@ public interface MapMaxSizePolicy {
 
     boolean overCapacity();
 
+    boolean overEvictionCapacity();
+
     MaxSizeConfig getMaxSizeConfig();
 
 }

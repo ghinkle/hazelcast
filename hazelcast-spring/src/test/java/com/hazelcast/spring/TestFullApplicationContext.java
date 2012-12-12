@@ -193,6 +193,7 @@ public class TestFullApplicationContext {
         assertEquals(1, simpleMapConfig.getAsyncBackupCount());
         assertEquals("LRU", simpleMapConfig.getEvictionPolicy());
         assertEquals(10, simpleMapConfig.getMaxSizeConfig().getSize());
+        assertEquals(400, simpleMapConfig.getMaxSizeConfig().getOverGrowthPercentage());
         assertEquals(50, simpleMapConfig.getEvictionPercentage());
         assertEquals(1, simpleMapConfig.getTimeToLiveSeconds());
         assertEquals("hz.LATEST_UPDATE", simpleMapConfig.getMergePolicy());

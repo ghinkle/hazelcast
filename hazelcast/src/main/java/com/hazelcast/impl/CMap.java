@@ -399,6 +399,8 @@ public class CMap {
         if (maxSizePolicy != null) {
             mapConfig.getMaxSizeConfig().setMaxSizePolicy(maxSizePolicy.getMaxSizeConfig().getMaxSizePolicy());
             mapConfig.getMaxSizeConfig().setSize(maxSizePolicy.getMaxSizeConfig().getSize());
+            mapConfig.getMaxSizeConfig().setOverGrowthPercentage(
+                    maxSizePolicy.getMaxSizeConfig().getOverGrowthPercentage());
         }
         mapConfig.setEvictionPercentage((int) (evictionRate * 100));
         return mapConfig;
@@ -422,12 +424,18 @@ public class CMap {
                 || lockEntireMap.isLockedBy(request.lockAddress, request.lockThreadId));
     }
 
-    final boolean overCapacity() {
-        if (maxSizePolicy != null && maxSizePolicy.overCapacity()) {
-            concurrentMapManager.executeCleanup(this, true);
-            return true;
+    final boolean checkOverCapacityAndTriggerEarlyCleanup() {
+        if (maxSizePolicy != null) {
+            if (maxSizePolicy.overEvictionCapacity()) {
+                concurrentMapManager.executeCleanup(this, true);
+            }
+            return maxSizePolicy.overCapacity();
         }
         return false;
+    }
+
+    final boolean isOverEvictionCapacity() {
+        return maxSizePolicy != null && maxSizePolicy.overEvictionCapacity();
     }
 
     public void lockMap(Request request) {
@@ -1283,12 +1291,20 @@ public class CMap {
             this.maxSizeConfig = maxSizeConfig;
         }
 
-        public int getMaxSize() {
+        public long getMaxSize() {
             return maxSizeConfig.getSize();
         }
 
-        public boolean overCapacity() {
-            return getMaxSize() <= mapIndexService.size();
+        final public boolean overCapacity() {
+            return getCurrentSize() >= (maxSizeConfig.getOverGrowthPercentage() / 100.0) * getMaxSize();
+        }
+
+        final public boolean overEvictionCapacity() {
+            return getCurrentSize() >= getMaxSize();
+        }
+
+        protected long getCurrentSize() {
+            return mapIndexService.size();
         }
 
         public MaxSizeConfig getMaxSizeConfig() {
@@ -1304,8 +1320,14 @@ public class CMap {
             memoryLimit = maxSizeConfig.getSize() * 1024L * 1024L; // MB to byte
         }
 
-        public boolean overCapacity() {
-            return totalCostOfRecords >= memoryLimit;
+        @Override
+        public long getMaxSize() {
+            return memoryLimit;
+        }
+
+        @Override
+        protected long getCurrentSize() {
+            return totalCostOfRecords;
         }
     }
 
@@ -1317,11 +1339,16 @@ public class CMap {
             maxPercentage = maxSizeConfig.getSize();
         }
 
-        public boolean overCapacity() {
+        @Override
+        public long getMaxSize() {
+            return maxPercentage;
+        }
+
+        @Override
+        protected long getCurrentSize() {
             final long total = Runtime.getRuntime().maxMemory();
             final long cost = totalCostOfRecords;
-            final int usedPercentage = (int) (((float) cost / total) * 100);
-            return usedPercentage >= maxPercentage;
+            return (int) (((float) cost / total) * 100);
         }
     }
 
@@ -1332,7 +1359,7 @@ public class CMap {
         }
 
         @Override
-        public int getMaxSize() {
+        public long getMaxSize() {
             final int maxSize = maxSizeConfig.getSize();
             final int clusterMemberSize = concurrentMapManager.dataMemberCount.get();
             final int memberCount = (clusterMemberSize == 0) ? 1 : clusterMemberSize;
@@ -1347,7 +1374,7 @@ public class CMap {
         }
 
         @Override
-        public int getMaxSize() {
+        public long getMaxSize() {
             final int maxSize = maxSizeConfig.getSize();
             if (maxSize == Integer.MAX_VALUE || maxSize == 0) return Integer.MAX_VALUE;
             if (node.getClusterImpl().getMembers().size() < 2) {
@@ -1379,10 +1406,12 @@ public class CMap {
                 final Set<Record> recordsUnknown = new HashSet<Record>();
                 final Set<Record> recordsToPurge = new HashSet<Record>();
                 final Set<Record> recordsToEvict = new HashSet<Record>();
-                final Set<Record> sortedRecords = new TreeSet<Record>(new ComparatorWrapper(evictionComparator));
+                final Set<Record> sortedEvictableRecords = new TreeSet<Record>(new ComparatorWrapper(evictionComparator));
+                final Set<Record> sortedDirtyEvictableRecords = new TreeSet<Record>(new ComparatorWrapper(evictionComparator));
                 final Collection<Record> records = mapRecords.values();
-                final boolean overCapacity = overCapacity();
-                final boolean evictionAware = evictionComparator != null && overCapacity;
+                final boolean overEvictionCapacity = isOverEvictionCapacity();
+                final boolean evictionAware = evictionComparator != null && overEvictionCapacity;
+                boolean shouldEvict = evictionAware && (forced || overEvictionCapacity);
                 int recordsStillOwned = 0;
                 int backupPurgeCount = 0;
                 long costOfRecords = 0L;
@@ -1394,20 +1423,22 @@ public class CMap {
                     boolean ownedOrBackup = partition.isOwnerOrBackup(thisAddress, getTotalBackupCount());
                     if (owner != null && !partitionManager.isPartitionMigrating(partition.getPartitionId())) {
                         if (owned) {
-                            if (store != null && mapStoreWrapper.isEnabled()
-                                    && writeDelayMillis > 0 && record.isDirty()) {
+                            if (isWriteBehindPending(record)) {
                                 if (now > record.getWriteTime()) {
-                                    recordsDirty.add(record);
-                                    record.setDirty(false);   // set dirty to false, we will store these soon
+                                    prepareRecordForWriteBehindStorage(recordsDirty, record);
                                 } else {
                                     dirty = true;
+                                    if (shouldEvict) {
+                                        sortedDirtyEvictableRecords.add(record);
+                                    }
+                                    recordsStillOwned++;
                                 }
                             } else if (shouldPurgeRecord(record, now)) {
                                 recordsToPurge.add(record);  // removed records
                             } else if (record.isActive() && !record.isValid(now)) {
                                 recordsToEvict.add(record);  // expired records
                             } else if (evictionAware && record.isActive() && record.isEvictable()) {
-                                sortedRecords.add(record);   // sorting for eviction
+                                sortedEvictableRecords.add(record);   // sorting for eviction
                                 recordsStillOwned++;
                             }
 
@@ -1425,12 +1456,21 @@ public class CMap {
                     }
                 }
                 totalCostOfRecords = costOfRecords;
-                if (evictionAware && (forced || overCapacity)) {
+                if (shouldEvict) {
                     int numberOfRecordsToEvict = (int) (recordsStillOwned * evictionRate);
                     int evictedCount = 0;
-                    for (Record record : sortedRecords) {
+                    for (Record record : sortedEvictableRecords) {
                         if (record.isActive() && record.isEvictable()) {
                             recordsToEvict.add(record);
+                            if (++evictedCount >= numberOfRecordsToEvict) {
+                                break;
+                            }
+                        }
+                    }
+                    if (evictedCount < numberOfRecordsToEvict) {
+                        for (Record record : sortedDirtyEvictableRecords) {
+                            prepareRecordForWriteBehindStorage(recordsDirty, record);
+                            // These will get picked up on the next clean up cycle
                             if (++evictedCount >= numberOfRecordsToEvict) {
                                 break;
                             }
@@ -1462,6 +1502,16 @@ public class CMap {
         } else {
             return false;
         }
+    }
+
+    private boolean isWriteBehindPending(Record record) {
+        return store != null && mapStoreWrapper.isEnabled()
+                && writeDelayMillis > 0 && record.isDirty();
+    }
+
+    private void prepareRecordForWriteBehindStorage(Set<Record> recordsDirty, Record record) {
+        recordsDirty.add(record);
+        record.setDirty(false);   // set dirty to false, we will store these soon
     }
 
     private void executePurgeUnknowns(final Set<Record> recordsUnknown) {
@@ -1651,6 +1701,8 @@ public class CMap {
             evictionTracker.remove(record.getKey());
             return true;
         }
+
+        evictionTracker.remove(req.key);
         return false;
     }
 

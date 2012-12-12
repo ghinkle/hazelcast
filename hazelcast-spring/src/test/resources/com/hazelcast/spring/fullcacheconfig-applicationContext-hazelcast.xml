@@ -175,6 +175,7 @@
                     async-backup-count="1"
                     time-to-live-seconds="1"
                     max-size="10"
+                    over-growth-percentage="400"
                     eviction-percentage="50"
                     eviction-policy="LRU"
                     merge-policy="hz.LATEST_UPDATE"/>

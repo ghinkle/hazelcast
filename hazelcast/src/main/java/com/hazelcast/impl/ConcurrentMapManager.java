@@ -2873,7 +2873,7 @@ public class ConcurrentMapManager extends BaseManager {
             CMap cmap = getOrCreateMap(request.name);
             if (!cmap.isNotLocked(request)) {
                 setRedoResponse(request, REDO_MAP_LOCKED);
-            } else if (cmap.overCapacity()) {
+            } else if (cmap.checkOverCapacityAndTriggerEarlyCleanup()) {
                 setRedoResponse(request, REDO_MAP_OVER_CAPACITY);
             } else {
                 Record record = ensureRecord(request);
@@ -2899,7 +2899,7 @@ public class ConcurrentMapManager extends BaseManager {
 
         void doOperation(Request request) {
             CMap cmap = getOrCreateMap(request.name);
-            if (cmap.overCapacity()) {
+            if (cmap.checkOverCapacityAndTriggerEarlyCleanup()) {
                 request.value = null;
                 request.response = Boolean.FALSE;
             } else {
@@ -2951,7 +2951,7 @@ public class ConcurrentMapManager extends BaseManager {
                 css.logObject(request, TRACE, cmap);
             }
             boolean checkCapacity = request.operation != CONCURRENT_MAP_REPLACE_IF_NOT_NULL;
-            boolean overCapacity = checkCapacity && cmap.overCapacity();
+            boolean overCapacity = checkCapacity && cmap.checkOverCapacityAndTriggerEarlyCleanup();
             boolean cmapNotLocked = cmap.isNotLocked(request);
             if (css.shouldLog(TRACE)) {
                 css.trace(request, "OverCapacity/CmapNotLocked", overCapacity, cmapNotLocked);

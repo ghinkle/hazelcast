@@ -29,6 +29,7 @@ public class MaxSizeConfig implements DataSerializable {
     public static final String POLICY_USED_HEAP_SIZE = "used_heap_size";
     public static final String POLICY_USED_HEAP_PERCENTAGE = "used_heap_percentage";
     int size = MapConfig.DEFAULT_MAX_SIZE;
+    int overGrowthPercentage = MapConfig.DEFAULT_OVER_GROWTH_PERCENTAGE;
     String maxSizePolicy = POLICY_CLUSTER_WIDE_MAP_SIZE;
 
     public void readData(DataInput in) throws IOException {
@@ -62,11 +63,16 @@ public class MaxSizeConfig implements DataSerializable {
         return this;
     }
 
-    @Override
-    public String toString() {
-        return "MaxSizeConfig{" +
-                "maxSizePolicy='" + maxSizePolicy + '\'' +
-                ", size=" + size +
-                '}';
+    public int getOverGrowthPercentage() {
+        return overGrowthPercentage;
+    }
+
+    public MaxSizeConfig setOverGrowthPercentage(int overGrowthPercentage) {
+        if (overGrowthPercentage < 100) {
+            this.overGrowthPercentage = 100;
+        }
+
+        this.overGrowthPercentage = overGrowthPercentage;
+        return this;
     }
 }

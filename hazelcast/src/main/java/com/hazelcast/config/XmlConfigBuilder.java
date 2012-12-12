@@ -646,6 +646,9 @@ public class XmlConfigBuilder extends AbstractXmlConfigHelper implements ConfigB
                     }
                 }
                 msc.setSize(size);
+            } else if ("over-growth-percentage".equals(nodeName)) {
+                mapConfig.setEvictionPercentage(getIntegerValue("over-growth-percentage", value,
+                        MapConfig.DEFAULT_OVER_GROWTH_PERCENTAGE));
             } else if ("eviction-percentage".equals(nodeName)) {
                 mapConfig.setEvictionPercentage(getIntegerValue("eviction-percentage", value,
                         MapConfig.DEFAULT_EVICTION_PERCENTAGE));

@@ -294,14 +294,19 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             }
 
             // Add a delay before activating migration, to give other nodes time to notice the dead one.
-            long migrationActivationDelaySeconds = node.groupProperties.PARTITION_MIGRATION_ACTIVATION_DELAY_SECONDS.getLong();
-            logger.info("Waiting " + migrationActivationDelaySeconds + " seconds before activating migration...");
+            long migrationActivationDelay = node.groupProperties.CONNECTION_MONITOR_INTERVAL.getLong()
+                    * node.groupProperties.CONNECTION_MONITOR_MAX_FAULTS.getInteger() * 5;
+
+            long callTimeout = node.groupProperties.OPERATION_CALL_TIMEOUT_MILLIS.getLong();
+            // delay should be smaller than call timeout, otherwise operations may fail because of invalid partition table
+            migrationActivationDelay = Math.min(migrationActivationDelay, callTimeout / 2);
+            migrationActivationDelay = Math.max(migrationActivationDelay, 1000L);
 
             nodeEngine.getExecutionService().schedule(new Runnable() {
                 public void run() {
                     migrationActive.set(true);
                 }
-            }, migrationActivationDelaySeconds, TimeUnit.SECONDS);
+            }, migrationActivationDelay, TimeUnit.MILLISECONDS);
         } finally {
             lock.unlock();
         }
